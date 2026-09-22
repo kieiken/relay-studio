@@ -163,6 +163,10 @@ export async function pageOperation(platform,action,payload){
    const metrics={};const integer=s=>/^\d[\d,]*$/.test(s?.trim()??'')?Number(s.replaceAll(',','')):undefined;
    if(platform==='note'){
     assert(location.origin==='https://note.com'&&location.pathname==='/dashboard','noteのダッシュボードを確認してください。');
+    const period=all('select').find(e=>[...e.options].some(o=>o.value==='ALL'));
+    assert(period,'noteの集計期間を確認できませんでした。');
+    if(period.value!=='ALL'){const setter=globalThis.HTMLSelectElement&&Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')?.set;if(setter)setter.call(period,'ALL');else period.value='ALL';period.dispatchEvent(new Event('input',{bubbles:true}));period.dispatchEvent(new Event('change',{bubbles:true}));}
+    await wait(()=>period.value==='ALL');await sleep(500);
     const table=await wait(()=>all('table').find(e=>visible(e)&&/インプレッション/.test(text(e))&&/ページビュー/.test(text(e))&&/コメント/.test(text(e))));
     const headers=all('th',table).map(e=>norm(text(e))),columns={impressions:headers.indexOf('インプレッション'),views:headers.indexOf('ページビュー'),likes:headers.indexOf('スキ'),comments:headers.indexOf('コメント')};
     assert(Object.values(columns).every(n=>n>0),'note記事一覧の4項目を確認できませんでした。');

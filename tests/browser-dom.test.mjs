@@ -51,13 +51,14 @@ test('note completion modal supplies exact editor article URL without a public l
 });
 test('note dashboard records the four article-list columns and keeps dashes unrecorded',async t=>{
  const url='https://note.com/tester/n/n123abcd',link=element('A',{href:url});
+ const period={value:'LAST_28_DAYS',options:[{value:'LAST_28_DAYS'},{value:'ALL'}],dispatchEvent:()=>{}};
  const headers=['タイトル','インプレッション','ページビュー','スキ','コメント','売上'].map(value=>element('TH',{text:value}));
  const cells=[element('TD'),element('TD',{text:'1,204'}),element('TD',{text:'88'}),element('TD',{text:'3'}),element('TD',{text:'-'}),element('TD',{text:'-'})];
  const row=element('TR');row.querySelectorAll=s=>s==='a[href]'?[link]:s==='td'?cells:[];
  const table=element('TABLE',{text:'記事一覧 インプレッション ページビュー スキ コメント'});table.querySelectorAll=s=>s==='th'?headers:s==='tr'?[row]:[];
- environment(t,{querySelectorAll:s=>s==='table'?[table]:[]},{origin:'https://note.com',pathname:'/dashboard'});
+ environment(t,{querySelectorAll:s=>s==='select'?[period]:s==='table'?[table]:[]},{origin:'https://note.com',pathname:'/dashboard'});
  const result=await pageOperation('note','feedback',{accountId:'tester',permalink:url});
- assert.deepEqual(result.metrics,{impressions:1204,views:88,likes:3});assert.equal(result.reference,'https://note.com/dashboard');
+ assert.deepEqual(result.metrics,{impressions:1204,views:88,likes:3});assert.equal(period.value,'ALL');assert.equal(result.reference,'https://note.com/dashboard');
 });
 test('RedNote preflight checks the closed-root public button and decoded image before arm',async t=>{
  const body=element('DIV',{text:'test body'}),title={...element('INPUT'),value:'test title'},img={...element('IMG'),complete:true,naturalWidth:600};
