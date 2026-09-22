@@ -31,3 +31,10 @@ test('server restart preserves interrupted browser jobs as unknown and does not 
  e.state.jobs.push({id:'interrupted',platform:'x',transport:'browser',status:'sending',phase:'final-click',lease:'old',content:{body:'test'},observations:[]});await e.persist();await e.close();
  e=await new Engine({dataDir:dir,credentials:{}}).init();assert.equal(e.state.jobs[0].status,'unknown');assert.equal(await e.browser.claim(),null);await e.tick();assert.equal(e.state.jobs[0].status,'unknown');
 });
+
+test('RedNote evidence requires the connected profile and retains minute-resolution creator time',()=>{
+ const j={platform:'rednote',accountId:'123456',profileId:'a'.repeat(24),content:{title:'test',body:'test body'},attemptAt:date};
+ const input={...evidence(),accountId:j.accountId,profileId:j.profileId,title:'test',permalink:'https://www.rednote.com/discovery/item/'+ 'b'.repeat(24)};
+ const result=verifyBrowserEvidence(j,input,new Date(date));assert.equal(result.timePrecision,'minute');assert.equal(result.timeSource,'creator-visible-time');assert.throws(()=>verifyBrowserEvidence(j,{...input,profileId:'c'.repeat(24)},new Date(date)));
+});
+test('minute-resolution publication time waits an extra minute before automatic 48h observation',async t=>{const {e,setNow}=await fixture(t);const j=await queued(e);Object.assign(j,{platform:'rednote',status:'published',publishedAt:date,timePrecision:'minute'});setNow('2026-09-24T00:00:30Z');assert.equal(await e.browser.feedbackWork(),null);setNow('2026-09-24T00:01:00Z');assert.equal((await e.browser.feedbackWork()).id,j.id);});

@@ -4,7 +4,7 @@ export const platforms = [
   {id:'x',name:'X',mark:'𝕏',color:'#17191b',auto:false,browser:true,limit:280,help:'公式投稿画面を開いて投稿します。従量課金APIは使いません。反響は公式画面から記録します。',docs:'https://docs.x.com/x-api/getting-started/pricing',editor:'https://x.com/compose/post'},
   {id:'instagram',name:'Instagram',mark:'◎',color:'#bf507b',auto:true,limit:2200,help:'プロアカウントのユーザーIDとInstagram Loginのアクセストークン。公開HTTPSのJPEG画像が必要です。',permissions:'instagram_business_basic / instagram_business_content_publish / instagram_business_manage_insights',accountLabel:'InstagramユーザーID',docs:'https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/'},
   {id:'note',name:'note',mark:'n',color:'#299b84',auto:false,browser:true,limit:100000,help:'公式エディタでタイトル・本文・画像を入力して公開します。パスワードやCookieは保存しません。',editor:'https://note.com/notes/new'},
-  {id:'rednote',name:'RedNote',mark:'小',color:'#df4b54',auto:false,browser:true,limit:1000,help:'公式クリエイター画面で画像・動画と本文を入力して公開します。反響は公式画面から記録します。',editor:'https://creator.rednote.com/publish/publish'}
+  {id:'rednote',name:'RedNote',mark:'小',color:'#df4b54',auto:false,browser:true,limit:1000,help:'Chrome拡張でタイトル・本文・画像1枚を公開します。本人照合には公開済みの記事が1件以上必要です。',editor:'https://creator.rednote.com/publish/publish'}
 ];
 export const labels = {queued:'自動配信待ち',manual:'公式画面で投稿',sending:'送信中',published:'公開済み',failed:'停止・要対応',unknown:'結果の照合が必要',cancelled:'取り消し済み'};
 export const metricLabels = {views:'閲覧',reach:'リーチ',likes:'いいね',comments:'コメント',replies:'返信',saved:'保存',shares:'シェア',reposts:'再投稿',quotes:'引用'};

@@ -24,6 +24,13 @@ export async function pageOperation(platform,action,payload){
  function attach(e,media){assert(e&&media,'画像の入力欄を確認できませんでした。');const bytes=Uint8Array.from(atob(media.base64),c=>c.charCodeAt(0)),dt=new DataTransfer();dt.items.add(new File([bytes],media.name,{type:media.mimeType}));e.files=dt.files;e.dispatchEvent(new Event('change',{bubbles:true}));}
  const titleBox=()=>one('textarea[placeholder*="タイトル"],input[placeholder*="标题"],input[placeholder*="標題"],textarea[placeholder*="标题"]');
  const bodyBox=()=>platform==='x'?one('[data-testid="tweetTextarea_0"][contenteditable="true"]'):one('[contenteditable="true"][role="textbox"],.tiptap[contenteditable="true"],.ProseMirror[contenteditable="true"],.ql-editor[contenteditable="true"]');
+ async function redManage(){
+  await wait(()=>one('.user-info'));
+  if(location.pathname!=='/new/note-manager'){const manage=await wait(()=>all('span,div').find(e=>visible(e)&&e.children.length===0&&norm(text(e))==='笔记管理'));manage.click();}
+  const published=await wait(()=>all('span,div').find(e=>visible(e)&&e.children.length===0&&norm(text(e))==='已发布'));published.click();
+  return await wait(()=>{const cards=redCards();return cards.length?cards:null;});
+ }
+ function redCards(){return all('.note-card').filter(visible).map(e=>{try{const data=JSON.parse(e.getAttribute('data-impression'));if(data.index?.value?.channelTabName!=='published')return null;const remoteId=data.noteTarget?.value?.noteId;if(!/^[a-z0-9]{16,64}$/i.test(remoteId))return null;const stamp=text(e.querySelector('.note-card__time')).trim();return {element:e,remoteId,title:text(e.querySelector('.note-card__title')),publishedAt:/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(stamp)?stamp.replace(' ','T')+':00+08:00':null};}catch{return null;}}).filter(Boolean);}
  async function identity(){
   let id,name;
   if(platform==='x'){const e=await wait(()=>one('[data-testid="SideNav_AccountSwitcher_Button"]'));id=text(e).match(/@([A-Za-z0-9_]+)/)?.[1];name=text(e).split('\n')[0];const link=one('[data-testid="AppTabBar_Profile_Link"]');assert(link&&new URL(link.href).pathname.toLowerCase()==='/'+String(id).toLowerCase(),'Xの本人プロフィールが一致しません。');}
@@ -62,11 +69,34 @@ export async function pageOperation(platform,action,payload){
   }
   const title=one('#detail-title'),body=one('#detail-desc'),time=one('time[datetime]');
   if(!title||!body)return null;
-  const stamp=time?.getAttribute('datetime')||text(one('.date')).match(/\d{4}[-/]\d{2}[-/]\d{2}\s+\d{2}:\d{2}(?::\d{2})?/)?.[0];
+  const stamp=payload.creatorPublishedAt||time?.getAttribute('datetime')||text(one('.date')).match(/\d{4}[-/]\d{2}[-/]\d{2}\s+\d{2}:\d{2}(?::\d{2})?/)?.[0];
   // Date-only and relative labels cannot support an actual publication timestamp.
   return stamp?{root:document,body:text(body),title:text(title),publishedAt:/T/.test(stamp)?stamp:stamp.replaceAll('/','-').replace(' ','T')+'+08:00'}:null;
  }
  try{
+  if(action==='identity-proof'&&platform==='rednote'){
+   const cards=await redManage();const card=cards[0];assert(card,'RedNoteの本人照合には公開済みの記事が必要です。');
+   return {remoteId:card.remoteId,name:text(one('.user-info'))};
+  }
+  if(action==='author'&&platform==='rednote'){
+   const root=await wait(()=>document.querySelector('#noteContainer'));
+   const a=await wait(()=>all('a[href*="/user/profile/"]',root).find(visible));return {profileURL:a.href,profileId:new URL(a.href).pathname.split('/').pop()};
+  }
+  if(action==='profile-identity'&&platform==='rednote'){
+   const match=await wait(()=>text(document.body).match(/(?:小红书号|小紅書號|rednote ID|RedNote ID|レッドノートID|RED ID)\s*[：:]\s*(\d{1,24})(?!\d)/i));
+   assert(match[1]===payload.accountId,'ログイン中のアカウントと設定IDが一致しません。');return {accountId:match[1],profileId:location.pathname.split('/').pop()};
+  }
+  if(action==='red-result'&&platform==='rednote'){
+   const cards=await redManage();const candidates=cards.filter(c=>norm(c.title)===norm(payload.content.title)&&c.publishedAt&&Date.parse(c.publishedAt)>=Date.parse(payload.attemptAt)-120000);
+   assert(candidates.length===1,'公開済みの対象記事を一意に照合できません。');const card=candidates[0];return {remoteId:card.remoteId,publishedAt:card.publishedAt};
+  }
+  if(action==='red-feedback'&&platform==='rednote'){
+   const cards=await redManage();const card=cards.find(c=>c.remoteId===payload.remoteId);assert(card,'反響取得先が一致しません。');
+   const cells=all('.note-card__stat',card.element);assert(cells.length===5,'数値を画面で照合できませんでした。未取得として記録します。');
+   const fingerprints=['M7.99902 3.83398','M3.18233 10.985','M3.25611 3.91336','M10.8848 14.2322','M8.28672 5.15797'];assert(cells.every((c,i)=>c.querySelector('svg path')?.getAttribute('d')?.startsWith(fingerprints[i])),'数値を画面で照合できませんでした。未取得として記録します。');
+   const metrics={};for(const [i,key] of ['views','comments','likes','saved','shares'].entries()){const raw=text(cells[i]).trim();if(/^\d[\d,]*$/.test(raw))metrics[key]=Number(raw.replaceAll(',',''));}
+   assert(Object.keys(metrics).length,'数値を画面で照合できませんでした。未取得として記録します。');return {metrics,evidence:{accountId:payload.accountId,permalink:payload.permalink}};
+  }
   if(action==='publishedURL')return {url:await wait(publicURL,10000)};
   if(action==='identity')return await identity();
   if(action==='new'){const link=await wait(()=>all('a').find(e=>visible(e)&&new URL(e.href).pathname==='/notes/new'));return {url:link.href};}
@@ -89,12 +119,13 @@ export async function pageOperation(platform,action,payload){
     const final=await wait(()=>button(['投稿する','公開する']));assert(!final.disabled,'公開ボタンが有効ではありません。');final.click();
     return {url:await wait(publicURL,40000)};
    }
-   const final=await wait(()=>button(['发布','立即发布','發佈','立即發佈']));assert(!final.disabled,'公開ボタンが有効ではありません。');final.click();return {url:await wait(publicURL,45000)};
+   const final=await wait(()=>button(['发布','立即发布','發佈','立即發佈']));assert(!final.disabled,'公開ボタンが有効ではありません。');final.click();await wait(()=>/发布成功|發布成功|成功发布/.test(text(document.body))||location.pathname==='/new/note-manager',45000);return {submitted:true};
   }
   if(action==='inspect'){
+   if(platform==='rednote'){const root=await wait(()=>document.querySelector('#noteContainer'));const authors=all('a[href*="/user/profile/"]',root).filter(visible);assert(authors.some(a=>new URL(a.href).pathname==='/user/profile/'+payload.profileId),'投稿アカウントの照合が一致しません。');}
    assert(location.origin+location.pathname===new URL(payload.permalink).origin+new URL(payload.permalink).pathname,'公開URLが一致しません。');const c=await wait(publicContent,30000);
    assert(norm(c.body)===norm(want(payload.content)),'公開本文の全文照合が一致しません。');if(platform!=='x')assert(norm(c.title)===norm(payload.content.title),'公開タイトルが一致しません。');
-   return {accountId:payload.accountId,permalink:payload.permalink,body:c.body,title:c.title,publishedAt:c.publishedAt};
+   return {accountId:payload.accountId,profileId:payload.profileId,permalink:payload.permalink,body:c.body,title:c.title,publishedAt:c.publishedAt,...(platform==='rednote'?{timePrecision:'minute',timeSource:'creator-visible-time'}:{})};
   }
   if(action==='feedback'){
    assert(location.origin+location.pathname===new URL(payload.permalink).origin+new URL(payload.permalink).pathname,'反響取得先が一致しません。');
