@@ -10,6 +10,7 @@ import {createStudio} from '../server.mjs';
 const sample=()=>({common:{title:'検証用',body:'テスト本文',link:'',mediaUrl:''},selected:['facebook'],overrides:{},scheduledAt:'2026-09-23T01:00:00Z'});
 const creds=()=>({tokens:{},async set(p,t){this.tokens[p]=t;},async get(p){if(!this.tokens[p])throw new Error('missing');return this.tokens[p];},async delete(p){delete this.tokens[p];}});
 async function fixture(t,connector={}){const dir=await mkdtemp(path.join(os.tmpdir(),'relay-test-'));let now=new Date('2026-09-22T00:00:00Z');const c=creds();let publishes=0,collections=0;const connectors={async verify(p,a){return {id:a,name:'Test account'};},async publish(j,token,onRemote){publishes++;await onRemote('999');return {remoteId:'999',permalink:'https://facebook.com/999',publishedAt:now.toISOString()};},async collect(){collections++;return {metrics:{likes:0},errors:[]};},...connector};const e=await new Engine({dataDir:dir,credentials:c,connectors,now:()=>now}).init();t.after(async()=>{await e.close();await rm(dir,{recursive:true,force:true});});return {e,dir,c,setNow:value=>now=new Date(value),publishes:()=>publishes,collections:()=>collections};}
+async function browserConnect(e){await e.browser.pair({extensionId:'a'.repeat(32)});await e.browser.heartbeat({version:'0.2.0'});await e.browser.connect({platform:'x',accountId:'example',observedAccountId:'example',verified:true});}
 async function connect(e){await e.connect('facebook',{accountId:'123',token:'test-only-secret'});}
 test('six default destinations; independent overrides preserved across switches',()=>{const d=normalizeDraft({...sample(),selected:['facebook','threads'],overrides:{threads:{mode:'individual',content:{body:'個別'}}}});d.common.body='共通を変更';assert.equal(effective(d,'threads').body,'個別');d.overrides.threads.mode='shared';assert.equal(effective(d,'threads').body,'共通を変更');d.overrides.threads.mode='individual';assert.equal(effective(d,'threads').body,'個別');assert.equal(lengthFor('x','あ'.repeat(141)),282);});
 test('persist drafts with revision checks; secrets never enter state',async t=>{const {e,dir}=await fixture(t);assert.equal(e.snapshot().settings.defaults.length,6);await connect(e);const d=await e.save(sample());assert.equal((await e.save({...d,common:{body:'変更'}})).revision,2);await assert.rejects(e.save(d),/別の画面/);assert.ok(!(await readFile(path.join(dir,'studio.json'),'utf8')).includes('test-only-secret'));});
@@ -17,14 +18,14 @@ test('enqueue validates all destinations, snapshots content and prevents duplica
 test('serialized parallel ticks send once; actual publication +48h, zero differs from missing',async t=>{const f=await fixture(t);await connect(f.e);const d=await f.e.save(sample());await f.e.enqueue(d.id,d.revision);f.setNow('2026-09-23T01:00:00Z');await Promise.all([f.e.tick(),f.e.tick()]);assert.equal(f.publishes(),1);assert.equal(f.e.snapshot().jobs[0].status,'published');f.setNow('2026-09-25T00:59:59Z');await f.e.tick();assert.equal(f.collections(),0);f.setNow('2026-09-25T01:00:00Z');await f.e.tick();await f.e.tick();assert.equal(f.collections(),1);const obs=f.e.snapshot().jobs[0].observations[0];assert.equal(obs.metrics.likes,0);assert.equal(obs.metrics.views,undefined);assert.equal(obs.period,'publication_48h');});
 test('missed 48h window is current lifetime; attempt failure is not blindly retried',async t=>{const f=await fixture(t);await connect(f.e);const d=await f.e.save(sample());await f.e.enqueue(d.id,d.revision);f.setNow('2026-09-23T01:00:00Z');await f.e.tick();f.setNow('2026-09-26T01:00:00Z');await f.e.tick();assert.equal(f.e.snapshot().jobs[0].observations[0].period,'current_lifetime');});
 test('unknown remote result retains remote id, never retries; paused state prevents I/O',async t=>{let count=0;const f=await fixture(t,{async publish(j,token,onRemote){count++;await onRemote('pending-123');throw new Error('network failed');}});await connect(f.e);const d=await f.e.save(sample());await f.e.enqueue(d.id,d.revision);f.setNow('2026-09-23T01:00:00Z');await f.e.settings({...f.e.snapshot().settings,paused:true});await f.e.tick();assert.equal(count,0);await f.e.settings({...f.e.snapshot().settings,paused:false});await f.e.tick();await f.e.tick();const j=f.e.snapshot().jobs[0];assert.equal(count,1);assert.equal(j.status,'unknown');assert.equal(j.remoteId,'pending-123');await assert.rejects(f.e.cancel(j.id));});
-test('late jobs stop, selected manual jobs do not publish and need verified evidence',async t=>{const f=await fixture(t);await connect(f.e);let d=await f.e.save(sample());await f.e.enqueue(d.id,d.revision);d=await f.e.save({...sample(),selected:['x']});const [job]=await f.e.enqueue(d.id,d.revision);f.setNow('2026-09-23T02:00:00Z');await f.e.tick();assert.equal(f.publishes(),0);assert.equal(f.e.snapshot().jobs[0].status,'failed');await assert.rejects(f.e.record(job.id,{permalink:'https://note.com/example/n/123',publishedAt:'2026-09-23T01:00:00Z',confirmed:true}));await f.e.record(job.id,{permalink:'https://x.com/example/status/123',publishedAt:'2026-09-23T01:00:00Z',confirmed:true});assert.equal(f.e.snapshot().jobs[1].verifiedBy,'user');});
+test('late jobs stop, selected manual jobs do not publish and need verified evidence',async t=>{const f=await fixture(t);await connect(f.e);let d=await f.e.save(sample());await f.e.enqueue(d.id,d.revision);const job={id:'legacy-x',platform:'x',status:'manual',content:{body:'legacy'},observations:[]};f.e.state.jobs.push(job);f.setNow('2026-09-23T02:00:00Z');await f.e.tick();assert.equal(f.publishes(),0);assert.equal(f.e.snapshot().jobs[0].status,'failed');await assert.rejects(f.e.record(job.id,{permalink:'https://note.com/example/n/123',publishedAt:'2026-09-23T01:00:00Z',confirmed:true}));await f.e.record(job.id,{permalink:'https://x.com/example/status/123',publishedAt:'2026-09-23T01:00:00Z',confirmed:true});assert.equal(f.e.snapshot().jobs[1].verifiedBy,'user');});
 test('manual metrics reject fabricated 48h, unknown metrics, negative or future measures',()=>{const j={platform:'note',publishedAt:'2026-09-22T00:00:00Z'},now=new Date('2026-09-25T00:00:00Z'),o={metrics:{likes:0},measuredAt:'2026-09-24T00:00:00Z',period:'publication_48h',reference:'公式画面'};assert.equal(observation(o,j,now).metrics.likes,0);for(const bad of [{...o,metrics:{likes:-1}},{...o,metrics:{reach:4}},{...o,measuredAt:'2026-09-25T00:00:00Z'},{...o,measuredAt:'2026-09-26T00:00:00Z'}])assert.throws(()=>observation(bad,j,now));});
 test('invalid defaults and URLs fail; IG image requirement and FB image limitation are explicit',()=>{assert.throws(()=>normalizeDraft({...sample(),selected:['bad']}));assert.throws(()=>normalizeDraft({...sample(),common:{body:'x',mediaUrl:'https://127.0.0.1/a.jpg'}}));const d=normalizeDraft({...sample(),selected:['instagram']});assert.ok(readiness(d,{}).some(v=>v.issues.includes('公開JPEG画像のURLが必要')));});
 test('localhost HTTP API blocks CSRF, host rebinding and foreign origins; saves and reloads',async t=>{const dir=await mkdtemp(path.join(os.tmpdir(),'relay-http-'));const app=await createStudio({dataDir:dir,credentials:creds(),worker:false});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(async()=>{await app.close();await rm(dir,{recursive:true,force:true});});const base=`http://127.0.0.1:${app.server.address().port}`;const s=await(await fetch(base+'/api/state')).json();assert.equal(s.settings.defaults.length,6);assert.equal((await fetch(base+'/api/state',{headers:{Origin:'https://evil.example'}})).status,403);assert.equal(await new Promise(resolve=>{http.get(base+'/api/state',{headers:{Host:'evil.example'}},r=>{r.resume();resolve(r.statusCode);});}),403);assert.equal((await fetch(base+'/api/drafts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample())})).status,403);const res=await fetch(base+'/api/drafts',{method:'POST',headers:{'Content-Type':'application/json','X-Studio-Token':s.csrf},body:JSON.stringify(sample())});assert.equal(res.status,200);assert.equal((await(await fetch(base+'/api/state')).json()).drafts.length,1);assert.equal((await fetch(base+'/')).status,200);});
 
 test('RedNote official international URLs can be recorded; lookalike domains are rejected',async t=>{
  const {e}=await fixture(t),input=sample();input.selected=['rednote'];input.common.mediaUrl='https://example.com/test.jpg';
- const d=await e.save(input),[job]=await e.enqueue(d.id,d.revision);
+ const job={id:'legacy-rednote',platform:'rednote',status:'manual',content:input.common,observations:[]};e.state.jobs.push(job);
  const evidence={publishedAt:'2026-09-22T00:00:00Z',confirmed:true};
  await assert.rejects(e.record(job.id,{...evidence,permalink:'https://rednote.com.evil.example/discovery/item/test'}));
  await e.record(job.id,{...evidence,permalink:'https://www.rednote.com/discovery/item/test'});
@@ -32,10 +33,10 @@ test('RedNote official international URLs can be recorded; lookalike domains are
 });
 
 test('one-click immediate registration needs no schedule; parallel submissions cannot duplicate',async t=>{
- const f=await fixture(t);await connect(f.e);const d=await f.e.save({...sample(),scheduledAt:'',selected:['facebook','x']});
+ const f=await fixture(t);await connect(f.e);await browserConnect(f.e);const d=await f.e.save({...sample(),scheduledAt:'',selected:['facebook','x']});
  const result=await Promise.allSettled([f.e.enqueue(d.id,d.revision,true),f.e.enqueue(d.id,d.revision,true)]);
  assert.equal(result.filter(r=>r.status==='fulfilled').length,1);assert.equal(f.e.snapshot().jobs.length,2);
- assert.equal(f.e.snapshot().jobs[1].status,'manual');await f.e.tick();await f.e.tick();assert.equal(f.publishes(),1);assert.equal(f.e.snapshot().jobs[0].status,'published');
+ assert.equal(f.e.snapshot().jobs[1].status,'queued');await f.e.tick();await f.e.tick();assert.equal(f.publishes(),1);assert.equal(f.e.snapshot().jobs[0].status,'published');
  await assert.rejects(f.e.enqueue(d.id,d.revision,true),/すでに登録/);
 });
 test('immediate preflight validates every destination and paused state before registering any job',async t=>{
@@ -44,5 +45,27 @@ test('immediate preflight validates every destination and paused state before re
  await assert.rejects(f.e.enqueue(d.id,d.revision),/未来/);await assert.rejects(f.e.enqueue(d.id,d.revision,'true'),/投稿方法/);
 });
 test('immediate request still uses revision checks and rejects weighted X overflow',async t=>{
- const f=await fixture(t);const d=await f.e.save({...sample(),scheduledAt:'',selected:['x'],common:{body:'あ'.repeat(141)}});await assert.rejects(f.e.enqueue(d.id,d.revision,true),/要対応/);await f.e.save({...d,common:{body:'short'}});await assert.rejects(f.e.enqueue(d.id,d.revision,true),/最新/);assert.equal(f.e.snapshot().jobs.length,0);
+ const f=await fixture(t);await browserConnect(f.e);const d=await f.e.save({...sample(),scheduledAt:'',selected:['x'],common:{body:'あ'.repeat(141)}});await assert.rejects(f.e.enqueue(d.id,d.revision,true),/要対応/);await f.e.save({...d,common:{body:'short'}});await assert.rejects(f.e.enqueue(d.id,d.revision,true),/最新/);assert.equal(f.e.snapshot().jobs.length,0);
+});
+
+test('confirmed deletion preserves publication history and prevents all subsequent collection or replay',async t=>{
+ const f=await fixture(t);await connect(f.e);const d=await f.e.save({...sample(),scheduledAt:''});await f.e.enqueue(d.id,d.revision,true);await f.e.tick();const j=f.e.state.jobs[0];
+ await f.e.collectNow(j.id);assert.equal(f.collections(),1);
+ await assert.rejects(f.e.markDeleted(j.id,{permalink:'https://facebook.com/other',confirmed:true}));
+ await assert.rejects(f.e.markDeleted(j.id,{permalink:j.permalink}));
+ const at=j.publishedAt;await f.e.markDeleted(j.id,{permalink:j.permalink,confirmed:true});
+ assert.equal(j.status,'deleted');assert.equal(j.publishedAt,at);assert.equal(j.observations.length,1);assert.ok(j.deletedAt);
+ f.setNow('2026-09-25T00:00:00Z');await f.e.tick();assert.equal(f.collections(),1);assert.equal(f.publishes(),1);
+ await assert.rejects(f.e.collectNow(j.id));await assert.rejects(f.e.enqueue(d.id,d.revision,true));
+ j.transport='browser';j.feedbackRequestedAt=f.e.now().toISOString();await f.e.browser.pair({extensionId:'a'.repeat(32)});assert.equal(await f.e.browser.feedbackWork(),null);
+});
+
+
+test('note records impressions and page views independently using the shared views metric',()=>{
+ const job={platform:'note',publishedAt:'2026-09-22T00:00:00Z'},now=new Date('2026-09-22T01:00:00Z');
+ const input={metrics:{impressions:120,views:31,likes:4,comments:0},measuredAt:now.toISOString(),period:'current_lifetime',reference:'公式分析画面'};
+ assert.deepEqual(observation(input,job,now).metrics,input.metrics);
+ const partial=observation({...input,metrics:{likes:0}},job,now).metrics;
+ assert.equal(partial.likes,0);assert.equal(partial.impressions,undefined);assert.equal(partial.views,undefined);assert.equal(partial.comments,undefined);
+ assert.throws(()=>observation({...input,metrics:{pv:120}},job,now),/未対応の指標/);
 });

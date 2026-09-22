@@ -1,4 +1,6 @@
-import messages from './messages-zh-TW.js';
+import baseMessages from './messages-zh-TW.js';
+import bridgeMessages from './messages-bridge-zh-TW.js';
+const messages={...baseMessages,...bridgeMessages};
 export const localeKey = 'relay.ui-language';
 export const supportedLocales = ['ja', 'zh-TW'];
 let locale = 'ja';
