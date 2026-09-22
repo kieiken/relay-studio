@@ -1,0 +1,2 @@
+export function localOrigin(url){try{const u=new URL(url);return !u.username&&!u.password&&['http://127.0.0.1:8792','http://localhost:8792'].includes(u.origin);}catch{return false;}}
+export function allowedURL(platform,url){try{const u=new URL(url);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&({x:['x.com'],note:['note.com','editor.note.com'],rednote:['creator.rednote.com','www.rednote.com']}[platform]??[]).includes(u.hostname);}catch{return false;}}

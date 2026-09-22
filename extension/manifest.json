@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Relay Studio Bridge",
+  "version": "0.2.0",
+  "description": "Relay Studio の原稿を X・note・RedNote の公式画面へ送り、公開結果を照合します。",
+  "permissions": ["storage", "alarms", "scripting"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*", "https://x.com/*", "https://note.com/*", "https://editor.note.com/*", "https://creator.rednote.com/*", "https://www.rednote.com/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "content_scripts": [{"matches": ["http://127.0.0.1/*", "http://localhost/*"], "js": ["local-client.js"], "run_at": "document_start"}],
+  "action": {"default_title": "Relay Studio を開く"}
+}
