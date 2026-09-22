@@ -20,7 +20,7 @@ export async function pageOperation(platform,action,payload){
  const wait=async(fn,ms=20000)=>{const end=Date.now()+ms;while(Date.now()<end){const v=fn();if(v)return v;await sleep(350);}throw Error('公式画面の必要な項目を確認できませんでした。画面とログイン状態を確認してください。');};
  const button=(names,root=document)=>all('button,[role="button"]',root).find(e=>visible(e)&&names.includes(norm(e.innerText||e.getAttribute('aria-label'))));
  function setValue(e,value){e.focus();const proto=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(e,value);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));}
- function setBody(e,value){e.focus();const range=document.createRange();range.selectNodeContents(e);const s=window.getSelection();s.removeAllRanges();s.addRange(range);document.execCommand('insertText',false,value);e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));}
+ function setBody(e,value){e.focus();const range=document.createRange();range.selectNodeContents(e);const s=window.getSelection();s.removeAllRanges();s.addRange(range);assert(document.execCommand('insertText',false,value),'本文を入力できませんでした。');}
  function attach(e,media){assert(e&&media,'画像の入力欄を確認できませんでした。');const bytes=Uint8Array.from(atob(media.base64),c=>c.charCodeAt(0)),dt=new DataTransfer();dt.items.add(new File([bytes],media.name,{type:media.mimeType}));e.files=dt.files;e.dispatchEvent(new Event('change',{bubbles:true}));}
  const titleBox=()=>one('textarea[placeholder*="タイトル"],input[placeholder*="标题"],input[placeholder*="標題"],textarea[placeholder*="标题"]');
  const bodyBox=()=>platform==='x'?one('[data-testid="tweetTextarea_0"][contenteditable="true"]'):one('[contenteditable="true"][role="textbox"],.tiptap[contenteditable="true"],.ProseMirror[contenteditable="true"],.ql-editor[contenteditable="true"]');
@@ -53,15 +53,36 @@ export async function pageOperation(platform,action,payload){
   }
   assert(id&&id.toLowerCase()===String(payload.accountId).toLowerCase(),'ログイン中のアカウントと設定IDが一致しません。');return {accountId:payload.accountId,name};
  }
+ function redPublishButton(){
+  const host=one('xhs-publish-btn');
+  if(!host)return button(['发布','立即发布','發佈','立即發佈']);
+  // The official visible footer lives in a closed shadow root. Chrome exposes
+  // it to content scripts without cookies, debugger or additional permissions.
+  const root=host.shadowRoot||globalThis.chrome?.dom?.openOrClosedShadowRoot(host);
+  const b=root&&button(['发布','立即发布','發佈','立即發佈'],root);
+  return host.getAttribute('submit-disabled')!=='true'&&host.getAttribute('submit-loading')!=='true'?b:null;
+ }
  async function checkContent(){
   const c=payload.content,body=await wait(bodyBox);assert(norm(text(body))===norm(want(c)),'投稿本文の全文照合が一致しません。');
   if(platform!=='x')assert(norm(titleBox()?.value)===norm(c.title),'投稿タイトルが一致しません。');
   if(platform==='x')await identity();
+  if(platform==='rednote'){
+   assert(redPublishButton(),'RedNoteの公開ボタンを確認できませんでした。');
+   const images=all('img.img.preview').filter(visible);
+   assert(images.length&&images.every(e=>e.complete&&e.naturalWidth>0),'RedNoteの投稿画像を読み込めませんでした。画像を確認してください。');
+  }
   return {ready:true};
  }
  function publicURL(){
   if(platform==='x'){const links=all('[data-testid="toast"] a,[role="alert"] a');return links.map(a=>a.href).find(h=>new RegExp('^https://x\\.com/'+payload.accountId+'/status/\\d+/?$','i').test(h));}
-  if(platform==='note')return [location.href,...all('a').filter(visible).map(a=>a.href)].find(h=>new RegExp('^https://note\\.com/'+payload.accountId+'/n/n[0-9a-f]+(?:[?#].*)?$').test(h));
+  if(platform==='note'){
+   const link=[location.href,...all('a').filter(visible).map(a=>a.href)].find(h=>new RegExp('^https://note\\.com/'+payload.accountId+'/n/n[0-9a-f]+(?:[?#].*)?$').test(h));
+   if(link)return link;
+   const editor=new URL(location.href),id=editor.pathname.match(/^\/notes\/(n[0-9a-f]+)(?:\/|$)/)?.[1];
+   const completed=all('h1,h2,h3,[role="heading"]').some(e=>visible(e)&&norm(text(e))==='記事が公開されました');
+   if(editor.origin==='https://editor.note.com'&&id&&completed)return 'https://note.com/'+payload.accountId+'/n/'+id;
+   return undefined;
+  }
   return [location.href,...all('a').filter(visible).map(a=>a.href)].find(h=>/^https:\/\/www\.rednote\.com\/(explore|discovery\/item)\/[a-z0-9]{16,64}/i.test(h));
  }
  function publicContent(){
@@ -118,6 +139,7 @@ export async function pageOperation(platform,action,payload){
    }
    const body=await wait(bodyBox,40000);if(platform!=='x')setValue(assert(titleBox(),'タイトル欄を確認してください。'),c.title);setBody(body,want(c));
    if(payload.media&&platform==='x'){attach(document.querySelector('input[data-testid="fileInput"]'),payload.media);await wait(()=>one('[data-testid="attachments"] [data-testid="tweetPhoto"], [data-testid="attachments"] img'),40000);}
+   if(platform==='rednote')await wait(()=>{const imgs=all('img.img.preview').filter(visible);return imgs.length&&imgs.every(e=>e.complete&&e.naturalWidth>0);},40000);
    await sleep(500);return await checkContent();
   }
   if(action==='check')return await checkContent();
@@ -129,7 +151,7 @@ export async function pageOperation(platform,action,payload){
     const final=await wait(()=>button(['投稿する','公開する']));assert(!final.disabled,'公開ボタンが有効ではありません。');final.click();
     return {url:await wait(publicURL,40000)};
    }
-   const final=await wait(()=>button(['发布','立即发布','發佈','立即發佈']));assert(!final.disabled,'公開ボタンが有効ではありません。');final.click();await wait(()=>/发布成功|發布成功|成功发布/.test(text(document.body))||location.pathname==='/new/note-manager',45000);return {submitted:true};
+   const final=await wait(redPublishButton);assert(!final.disabled,'公開ボタンが有効ではありません。');final.click();await wait(()=>/发布成功|發布成功|成功发布/.test(text(document.body))||location.pathname==='/new/note-manager',45000);return {submitted:true};
   }
   if(action==='inspect'){
    if(platform==='rednote'){const root=await wait(()=>document.querySelector('#noteContainer'));const authors=all('a[href*="/user/profile/"]',root).filter(visible);assert(authors.some(a=>new URL(a.href).pathname==='/user/profile/'+payload.profileId),'投稿アカウントの照合が一致しません。');}

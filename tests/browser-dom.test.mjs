@@ -31,3 +31,31 @@ test('RedNote opens the media child and restores window.open after capturing onl
  const result=await redCardLink(remoteId);assert.equal(result.url,'https://www.rednote.com/discovery/item/'+remoteId+'?source=creator');assert.deepEqual(opened,['https://example.com/'+remoteId]);assert.equal(win.open,original);
  const missing=await redCardLink('b'.repeat(24));assert.ok(missing.error);assert.equal(win.open,original);
 });
+
+test('X preparation emits native input once, rather than doubling a controlled editor body',async t=>{
+ const previousWindow=globalThis.window,previousTimeout=globalThis.setTimeout;
+ const body=element('DIV');body.focus=()=>{};body.dispatchEvent=()=>{throw Error('Synthetic input would double text');};
+ const profile=element('A',{href:'https://x.com/tester'}),switcher=element('BUTTON');let insertions=0;
+ environment(t,{createRange:()=>({selectNodeContents(){}}),execCommand:(_cmd,_ui,value)=>{insertions++;body.innerText=value;return true;},querySelectorAll:s=>({'[data-testid="tweetTextarea_0"][contenteditable="true"]':[body],'[data-testid="SideNav_AccountSwitcher_Button"]':[switcher],'[data-testid="AppTabBar_Profile_Link"]':[profile]}[s]??[])},{origin:'https://x.com'});
+ globalThis.window={getSelection:()=>({removeAllRanges(){},addRange(){}})};globalThis.setTimeout=fn=>{queueMicrotask(fn);return 1;};t.after(()=>{globalThis.window=previousWindow;globalThis.setTimeout=previousTimeout;});
+ const result=await pageOperation('x','prepare',{accountId:'tester',content:{body:'Exact one-time test 🌿'}});
+ assert.equal(result.ready,true);assert.equal(body.innerText,'Exact one-time test 🌿');assert.equal(insertions,1);
+});
+test('note completion modal supplies exact editor article URL without a public link',async t=>{
+ const heading=element('H2',{text:'記事が公開されました'});
+ environment(t,{querySelectorAll:s=>s==='h1,h2,h3,[role="heading"]'?[heading]:[]},{href:'https://editor.note.com/notes/n123abcd/edit/'});
+ assert.equal((await pageOperation('note','publishedURL',{accountId:'tester'})).url,'https://note.com/tester/n/n123abcd');
+ // An editor URL alone must never be treated as publication success.
+ heading.innerText='公開設定';const oldNow=Date.now;let clock=0;Date.now=()=>clock+=20000;t.after(()=>{Date.now=oldNow;});
+ assert.ok((await pageOperation('note','publishedURL',{accountId:'tester'})).error);
+});
+test('RedNote preflight checks the closed-root public button and decoded image before arm',async t=>{
+ const body=element('DIV',{text:'test body'}),title={...element('INPUT'),value:'test title'},img={...element('IMG'),complete:true,naturalWidth:600};
+ let disabled=false;const publish=element('BUTTON',{text:'发布'}),host=element('XHS-PUBLISH-BTN');host.getAttribute=k=>k==='submit-disabled'?String(disabled):null;
+ const root={querySelectorAll:()=>[publish]},oldChrome=globalThis.chrome;globalThis.chrome={dom:{openOrClosedShadowRoot:e=>e===host?root:null}};t.after(()=>{globalThis.chrome=oldChrome;});
+ environment(t,{querySelectorAll:s=>s==='xhs-publish-btn'?[host]:s==='img.img.preview'?[img]:s.includes('contenteditable')?[body]:s.includes('textarea[placeholder')?[title]:[]},{});
+ const payload={content:{title:'test title',body:'test body'}};
+ assert.equal((await pageOperation('rednote','check',payload)).ready,true);
+ img.naturalWidth=0;assert.match((await pageOperation('rednote','check',payload)).error,/画像/);
+ img.naturalWidth=600;disabled=true;assert.match((await pageOperation('rednote','check',payload)).error,/公開ボタン/);
+});

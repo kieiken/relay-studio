@@ -53,7 +53,12 @@ async function publish(job){
   await api('arm',{jobId:job.id,lease:job.lease,accountId:job.accountId,contentHash:job.contentHash});
   let submitted;
   try{submitted=await operation(tab.id,job.platform,'submit',{accountId:job.accountId,content:job.content});}
-  catch(e){if(job.platform!=='rednote'){await ready(tab.id,job.platform);submitted=await operation(tab.id,job.platform,'publishedURL',{accountId:job.accountId});}}
+  catch(e){
+   // Keep an unconfirmed RedNote editor intact for diagnosis. Never discard
+   // the actual submit error by navigating to an unrelated published list.
+   if(job.platform==='rednote')throw e;
+   await ready(tab.id,job.platform);submitted=await operation(tab.id,job.platform,'publishedURL',{accountId:job.accountId});
+  }
   let creatorPublishedAt;
   if(job.platform==='rednote'){
    // Reconcile against the published-only manager; never infer success from clicking.
