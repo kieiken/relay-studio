@@ -47,3 +47,15 @@ test('immediate preflight validates every destination and paused state before re
 test('immediate request still uses revision checks and rejects weighted X overflow',async t=>{
  const f=await fixture(t);await browserConnect(f.e);const d=await f.e.save({...sample(),scheduledAt:'',selected:['x'],common:{body:'あ'.repeat(141)}});await assert.rejects(f.e.enqueue(d.id,d.revision,true),/要対応/);await f.e.save({...d,common:{body:'short'}});await assert.rejects(f.e.enqueue(d.id,d.revision,true),/最新/);assert.equal(f.e.snapshot().jobs.length,0);
 });
+
+test('confirmed deletion preserves publication history and prevents all subsequent collection or replay',async t=>{
+ const f=await fixture(t);await connect(f.e);const d=await f.e.save({...sample(),scheduledAt:''});await f.e.enqueue(d.id,d.revision,true);await f.e.tick();const j=f.e.state.jobs[0];
+ await f.e.collectNow(j.id);assert.equal(f.collections(),1);
+ await assert.rejects(f.e.markDeleted(j.id,{permalink:'https://facebook.com/other',confirmed:true}));
+ await assert.rejects(f.e.markDeleted(j.id,{permalink:j.permalink}));
+ const at=j.publishedAt;await f.e.markDeleted(j.id,{permalink:j.permalink,confirmed:true});
+ assert.equal(j.status,'deleted');assert.equal(j.publishedAt,at);assert.equal(j.observations.length,1);assert.ok(j.deletedAt);
+ f.setNow('2026-09-25T00:00:00Z');await f.e.tick();assert.equal(f.collections(),1);assert.equal(f.publishes(),1);
+ await assert.rejects(f.e.collectNow(j.id));await assert.rejects(f.e.enqueue(d.id,d.revision,true));
+ j.transport='browser';j.feedbackRequestedAt=f.e.now().toISOString();await f.e.browser.pair({extensionId:'a'.repeat(32)});assert.equal(await f.e.browser.feedbackWork(),null);
+});

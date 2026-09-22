@@ -6,6 +6,6 @@ export const platforms = [
   {id:'note',name:'note',mark:'n',color:'#299b84',auto:false,browser:true,limit:100000,help:'公式エディタでタイトル・本文・画像を入力して公開します。パスワードやCookieは保存しません。',editor:'https://note.com/notes/new'},
   {id:'rednote',name:'RedNote',mark:'小',color:'#df4b54',auto:false,browser:true,limit:1000,help:'Chrome拡張でタイトル・本文・画像1枚を公開します。本人照合には公開済みの記事が1件以上必要です。',editor:'https://creator.rednote.com/publish/publish'}
 ];
-export const labels = {queued:'自動配信待ち',manual:'公式画面で投稿',sending:'送信中',published:'公開済み',failed:'停止・要対応',unknown:'結果の照合が必要',cancelled:'取り消し済み'};
+export const labels = {queued:'自動配信待ち',manual:'公式画面で投稿',sending:'送信中',published:'公開済み',failed:'停止・要対応',unknown:'結果の照合が必要',cancelled:'取り消し済み',deleted:'削除済み'};
 export const metricLabels = {views:'閲覧',reach:'リーチ',likes:'いいね',comments:'コメント',replies:'返信',saved:'保存',shares:'シェア',reposts:'再投稿',quotes:'引用'};
 export const metricKeys = {facebook:['views','likes','comments','shares'],threads:['views','likes','replies','reposts','quotes','shares'],x:['views','likes','replies','reposts'],instagram:['views','reach','likes','comments','saved','shares'],note:['views','likes','comments'],rednote:['views','likes','comments','saved','shares']};

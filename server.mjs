@@ -39,7 +39,7 @@ export async function createStudio({dataDir=process.env.RELAY_DATA_DIR??path.joi
    const c=/^\/api\/connections\/(facebook|threads|instagram|x|note|rednote)\/(connect|disconnect)$/.exec(route);
    if(c)return send(res,200,c[2]==='connect'?await engine.connect(c[1],body):await engine.disconnect(c[1]));
    const d=/^\/api\/drafts\/([a-f0-9-]+)\/queue$/.exec(route);if(d)return send(res,200,await engine.enqueue(d[1],body.revision,body.sendNow??false));
-   const j=/^\/api\/jobs\/([a-f0-9-]+)\/(cancel|record|feedback|collectNow|reconcile)$/.exec(route);
+   const j=/^\/api\/jobs\/([a-f0-9-]+)\/(cancel|record|feedback|collectNow|reconcile|markDeleted)$/.exec(route);
    if(j)return send(res,200,await engine[j[2]](j[1],body));
   }
   if(method==='GET'&&['/','/index.html','/app.js','/styles.css','/catalog.js','/i18n.js','/messages-zh-TW.js','/favicon.svg','/bridge-client.js','/messages-bridge-zh-TW.js'].includes(route)){
