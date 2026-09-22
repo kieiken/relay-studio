@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Relay Studio — ひとつの想いを、それぞれの場所へ。</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<div class="shell">
+ <aside class="sidebar">
+  <a class="brand" href="#compose"><span class="brand-icon">r<span>↗</span></span><span>relay<span class="brand-sub">PUBLISHING STUDIO</span></span></a>
+  <div class="workspace"><span class="workspace-icon">W</span><div>マイワークスペース<small>この端末に保存</small></div><span class="local-dot"></span></div>
+  <p class="nav-label">WORKSPACE</p>
+  <nav aria-label="メインナビゲーション">
+   <a href="#compose" data-nav="compose"><span>＋</span>投稿をつくる</a>
+   <a href="#delivery" data-nav="delivery"><span>▤</span>配信・下書き<span id="queue-count" class="nav-count">0</span></a>
+   <a href="#results" data-nav="results"><span>▥</span>反響を見る</a>
+   <a href="#settings" data-nav="settings"><span>⚙</span>接続・初期設定</a>
+  </nav>
+  <div class="sidebar-bottom"><div class="sidebar-note"><span class="local-dot"></span>ローカルワークスペース<p>原稿もキーも、あなたの手元に。</p></div><small>RELAY STUDIO <span class="beta">ALPHA 0.1.4</span></small></div>
+ </aside>
+ <div class="main-shell"><header class="topbar"><span id="breadcrumb">ワークスペース / 投稿をつくる</span><div><label class="language-picker"><span>Language</span><select id="ui-language" aria-label="UI言語 / 介面語言"><option value="ja">日本語</option><option value="zh-TW">繁體中文（台灣）</option></select></label><span id="run-status" class="pill">端末で実行</span><button id="refresh" class="icon-button" aria-label="状態を更新">↻</button></div></header><main id="main"><div class="loading">ワークスペースを読み込み中…</div></main></div>
+</div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="modal" aria-labelledby="modal-title"></dialog>
+<script type="module" src="/app.js"></script>
+</body></html>

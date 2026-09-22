@@ -1,0 +1,19 @@
+{
+  "name": "relay-social-studio",
+  "version": "0.1.4",
+  "private": true,
+  "type": "module",
+  "description": "Local multi-platform publishing studio",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "package": "node scripts/package.mjs",
+    "diagnose": "node scripts/diagnose.mjs"
+  },
+  "dependencies": {
+    "twitter-text": "3.1.0"
+  }
+}

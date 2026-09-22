@@ -1,0 +1,15 @@
+node_modules/
+dist/
+reviews/
+.env
+.env.*
+*.log
+.DS_Store
+.local/
+data/
+studio.json
+studio.json.tmp
+instance.lock
+# Local browser test harnesses contain workstation-specific runtime paths.
+tests/ui-check.mjs
+tests/language-ui.mjs
