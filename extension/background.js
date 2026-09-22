@@ -13,12 +13,19 @@ async function operation(tabId,platform,action,payload={}){
  const result=results[0]?.result;if(!result||result.error)throw Error(result?.error||'画面から結果を取得できませんでした。');return result;
 }
 async function ready(tabId,platform){for(let n=0;n<40;n++){const tab=await chrome.tabs.get(tabId);if(tab.status==='complete'){if(!allowedURL(platform,tab.url))throw Error('公式画面を確認してください。');return;}await delay(500);}throw Error('公式画面の読み込みが完了しませんでした。');}
-const home={x:'https://x.com/home',note:'https://note.com/',rednote:'https://creator.rednote.com/new/note-manager'};
+const home={x:'https://x.com/home',note:'https://note.com/',rednote:'https://creator.rednote.com/publish/publish'};
+async function redManager(tabId){
+ // Wait for the authenticated app before navigating. A page-injected promise
+ // cannot survive the creator site's full-document navigation.
+ await operation(tabId,'rednote','creator-ready');
+ await chrome.tabs.update(tabId,{url:'https://creator.rednote.com/new/note-manager'});await ready(tabId,'rednote');
+}
 async function redURL(tabId,remoteId){const result=await chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:redCardLink,args:[remoteId]});const r=result[0]?.result;if(!r?.url||!allowedURL('rednote',r.url))throw Error(r?.error||'公開URLを照合できません。');return r.url;}
 async function identity(platform,accountId){
  if(!home[platform])throw Error('投稿先を確認してください。');const tab=await chrome.tabs.create({url:home[platform],active:platform==='rednote'});let publicTab,timer;
  try{return await Promise.race([(async()=>{await ready(tab.id,platform);
   if(platform!=='rednote')return await operation(tab.id,platform,'identity',{accountId});
+  await redManager(tab.id);
   const proof=await operation(tab.id,'rednote','identity-proof',{accountId}),url=await redURL(tab.id,proof.remoteId);
   publicTab=await chrome.tabs.create({url,active:true});await ready(publicTab.id,'rednote');const author=await operation(publicTab.id,'rednote','author');
   if(!allowedURL('rednote',author.profileURL))throw Error('投稿アカウントの照合が一致しません。');await chrome.tabs.update(publicTab.id,{url:author.profileURL});await ready(publicTab.id,'rednote');
@@ -63,7 +70,7 @@ async function publish(job){
 }
 async function feedback(job){
  await chrome.storage.local.set({active:{kind:'feedback',jobId:job.id,lease:job.feedbackLease}});let tab;
- try{await identity(job.platform,job.accountId);tab=await chrome.tabs.create({url:job.platform==='rednote'?'https://creator.rednote.com/new/note-manager':job.permalink,active:job.platform==='rednote'});await ready(tab.id,job.platform);const result=await operation(tab.id,job.platform,job.platform==='rednote'?'red-feedback':'feedback',{accountId:job.accountId,permalink:job.permalink,remoteId:job.remoteId});await api('feedbackResult',{jobId:job.id,lease:job.feedbackLease,...result});}
+ try{await identity(job.platform,job.accountId);tab=await chrome.tabs.create({url:job.platform==='rednote'?home.rednote:job.permalink,active:job.platform==='rednote'});await ready(tab.id,job.platform);if(job.platform==='rednote')await redManager(tab.id);const result=await operation(tab.id,job.platform,job.platform==='rednote'?'red-feedback':'feedback',{accountId:job.accountId,permalink:job.permalink,remoteId:job.remoteId});await api('feedbackResult',{jobId:job.id,lease:job.feedbackLease,...result});}
  catch(e){await api('feedbackResult',{jobId:job.id,lease:job.feedbackLease,error:e.message}).catch(()=>{});}
  finally{await chrome.storage.local.remove('active');if(tab)await chrome.tabs.remove(tab.id).catch(()=>{});}
 }

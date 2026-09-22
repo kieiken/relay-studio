@@ -26,7 +26,7 @@ export async function pageOperation(platform,action,payload){
  const bodyBox=()=>platform==='x'?one('[data-testid="tweetTextarea_0"][contenteditable="true"]'):one('[contenteditable="true"][role="textbox"],.tiptap[contenteditable="true"],.ProseMirror[contenteditable="true"],.ql-editor[contenteditable="true"]');
  async function redManage(){
   await wait(()=>one('.user-info'));
-  if(location.pathname!=='/new/note-manager'){const manage=await wait(()=>all('span,div').find(e=>visible(e)&&e.children.length===0&&norm(text(e))==='笔记管理'));manage.click();}
+  assert(location.pathname==='/new/note-manager','公式画面の読み込みが完了しませんでした。');
   const published=await wait(()=>all('span,div').find(e=>visible(e)&&e.children.length===0&&norm(text(e))==='已发布'));published.click();
   return await wait(()=>{const cards=redCards();return cards.length?cards:null;});
  }
@@ -83,6 +83,7 @@ export async function pageOperation(platform,action,payload){
   return stamp?{root:document,body:text(body),title:text(title),publishedAt:/T/.test(stamp)?stamp:stamp.replaceAll('/','-').replace(' ','T')+'+08:00'}:null;
  }
  try{
+  if(action==='creator-ready'&&platform==='rednote'){await wait(()=>one('.user-info'));return {ready:true};}
   if(action==='identity-proof'&&platform==='rednote'){
    const cards=await redManage();const card=cards[0];assert(card,'RedNoteの本人照合には公開済みの記事が必要です。');
    return {remoteId:card.remoteId,name:text(one('.user-info'))};
