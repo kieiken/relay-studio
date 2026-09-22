@@ -61,11 +61,11 @@ test('confirmed deletion preserves publication history and prevents all subseque
 });
 
 
-test('note records impressions and PV independently and does not relabel legacy views',()=>{
+test('note records impressions and page views independently using the shared views metric',()=>{
  const job={platform:'note',publishedAt:'2026-09-22T00:00:00Z'},now=new Date('2026-09-22T01:00:00Z');
- const input={metrics:{impressions:120,pv:31,likes:4,comments:0},measuredAt:now.toISOString(),period:'current_lifetime',reference:'公式分析画面'};
+ const input={metrics:{impressions:120,views:31,likes:4,comments:0},measuredAt:now.toISOString(),period:'current_lifetime',reference:'公式分析画面'};
  assert.deepEqual(observation(input,job,now).metrics,input.metrics);
  const partial=observation({...input,metrics:{likes:0}},job,now).metrics;
- assert.equal(partial.likes,0);assert.equal(partial.impressions,undefined);assert.equal(partial.pv,undefined);assert.equal(partial.comments,undefined);
- assert.throws(()=>observation({...input,metrics:{views:120}},job,now),/未対応の指標/);
+ assert.equal(partial.likes,0);assert.equal(partial.impressions,undefined);assert.equal(partial.views,undefined);assert.equal(partial.comments,undefined);
+ assert.throws(()=>observation({...input,metrics:{pv:120}},job,now),/未対応の指標/);
 });

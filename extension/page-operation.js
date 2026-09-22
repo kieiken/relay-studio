@@ -160,20 +160,27 @@ export async function pageOperation(platform,action,payload){
    return {accountId:payload.accountId,profileId:payload.profileId,permalink:payload.permalink,body:c.body,title:c.title,publishedAt:c.publishedAt,...(platform==='rednote'?{timePrecision:'minute',timeSource:'creator-visible-time'}:{})};
   }
   if(action==='feedback'){
-   assert(location.origin+location.pathname===new URL(payload.permalink).origin+new URL(payload.permalink).pathname,'反響取得先が一致しません。');
    const metrics={};const integer=s=>/^\d[\d,]*$/.test(s?.trim()??'')?Number(s.replaceAll(',','')):undefined;
-   if(platform==='x'){
+   if(platform==='note'){
+    assert(location.origin==='https://note.com'&&location.pathname==='/dashboard','noteのダッシュボードを確認してください。');
+    const table=await wait(()=>all('table').find(e=>visible(e)&&/インプレッション/.test(text(e))&&/ページビュー/.test(text(e))&&/コメント/.test(text(e))));
+    const headers=all('th',table).map(e=>norm(text(e))),columns={impressions:headers.indexOf('インプレッション'),views:headers.indexOf('ページビュー'),likes:headers.indexOf('スキ'),comments:headers.indexOf('コメント')};
+    assert(Object.values(columns).every(n=>n>0),'note記事一覧の4項目を確認できませんでした。');
+    const target=new URL(payload.permalink);const row=all('tr',table).find(e=>all('a[href]',e).some(a=>{const url=new URL(a.href);return url.origin===target.origin&&url.pathname===target.pathname;}));
+    assert(row,'note記事一覧で対象記事を確認できませんでした。');const cells=all('td',row);
+    for(const [key,index] of Object.entries(columns)){const value=integer(text(cells[index]));if(value!==undefined)metrics[key]=value;}
+   }else if(platform==='x'){
+    assert(location.origin+location.pathname===new URL(payload.permalink).origin+new URL(payload.permalink).pathname,'反響取得先が一致しません。');
     const c=await wait(publicContent),labels=all('[aria-label]',c.root).map(e=>e.getAttribute('aria-label')).join('、');
     for(const [k,words] of Object.entries({views:'表示|Views?|次查看|次瀏覽',likes:'いいね|Likes?|個喜歡|次赞',replies:'返信|replies|則回覆|条回复',reposts:'リポスト|reposts?|次轉發|次转帖'})){
      const match=labels.match(new RegExp('(?:^|[、,])\\s*([\\d,]+)\\s*(?:件の)?(?:'+words+')','i'));if(match)metrics[k]=integer(match[1]);
     }
-   }else if(platform==='note'){
-    const b=all('button[aria-label]').find(e=>visible(e)&&/^\d[\d,]*スキ/.test(e.getAttribute('aria-label')));if(b)metrics.likes=integer(b.getAttribute('aria-label').match(/^[\d,]+/)[0]);
    }else{
+    assert(location.origin+location.pathname===new URL(payload.permalink).origin+new URL(payload.permalink).pathname,'反響取得先が一致しません。');
     for(const [k,sel] of Object.entries({likes:'.like-wrapper .count',saved:'.collect-wrapper .count',comments:'.chat-wrapper .count'})){const e=one(sel),n=integer(text(e));if(n!==undefined)metrics[k]=n;}
    }
    for(const k of Object.keys(metrics))if(metrics[k]===undefined)delete metrics[k];assert(Object.keys(metrics).length,'数値を画面で照合できませんでした。未取得として記録します。');
-   return {evidence:{accountId:payload.accountId,permalink:payload.permalink},metrics};
+   return {evidence:{accountId:payload.accountId,permalink:payload.permalink},metrics,reference:platform==='note'?'https://note.com/dashboard':payload.permalink};
   }
   throw Error('未対応の画面操作です。');
  }catch(e){return {error:e.message};}

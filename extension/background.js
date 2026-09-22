@@ -75,7 +75,7 @@ async function publish(job){
 }
 async function feedback(job){
  await chrome.storage.local.set({active:{kind:'feedback',jobId:job.id,lease:job.feedbackLease}});let tab;
- try{await identity(job.platform,job.accountId);tab=await chrome.tabs.create({url:job.platform==='rednote'?home.rednote:job.permalink,active:job.platform==='rednote'});await ready(tab.id,job.platform);if(job.platform==='rednote')await redManager(tab.id);const result=await operation(tab.id,job.platform,job.platform==='rednote'?'red-feedback':'feedback',{accountId:job.accountId,permalink:job.permalink,remoteId:job.remoteId});await api('feedbackResult',{jobId:job.id,lease:job.feedbackLease,...result});}
+ try{await identity(job.platform,job.accountId);const url=job.platform==='rednote'?home.rednote:job.platform==='note'?'https://note.com/dashboard':job.permalink;tab=await chrome.tabs.create({url,active:job.platform==='rednote'});await ready(tab.id,job.platform);if(job.platform==='rednote')await redManager(tab.id);const result=await operation(tab.id,job.platform,job.platform==='rednote'?'red-feedback':'feedback',{accountId:job.accountId,permalink:job.permalink,remoteId:job.remoteId});await api('feedbackResult',{jobId:job.id,lease:job.feedbackLease,...result});}
  catch(e){await api('feedbackResult',{jobId:job.id,lease:job.feedbackLease,error:e.message}).catch(()=>{});}
  finally{await chrome.storage.local.remove('active');if(tab)await chrome.tabs.remove(tab.id).catch(()=>{});}
 }
