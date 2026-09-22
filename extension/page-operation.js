@@ -33,7 +33,16 @@ export async function pageOperation(platform,action,payload){
  function redCards(){return all('.note-card').filter(visible).map(e=>{try{const data=JSON.parse(e.getAttribute('data-impression'));if(data.index?.value?.channelTabName!=='published')return null;const remoteId=data.noteTarget?.value?.noteId;if(!/^[a-z0-9]{16,64}$/i.test(remoteId))return null;const stamp=text(e.querySelector('.note-card__time')).trim();return {element:e,remoteId,title:text(e.querySelector('.note-card__title')),publishedAt:/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(stamp)?stamp.replace(' ','T')+':00+08:00':null};}catch{return null;}}).filter(Boolean);}
  async function identity(){
   let id,name;
-  if(platform==='x'){const e=await wait(()=>one('[data-testid="SideNav_AccountSwitcher_Button"]'));id=text(e).match(/@([A-Za-z0-9_]+)/)?.[1];name=text(e).split('\n')[0];const link=one('[data-testid="AppTabBar_Profile_Link"]');assert(link&&new URL(link.href).pathname.toLowerCase()==='/'+String(id).toLowerCase(),'Xの本人プロフィールが一致しません。');}
+  if(platform==='x'){
+   const e=await wait(()=>one('[data-testid="SideNav_AccountSwitcher_Button"]'));
+   const link=await wait(()=>one('[data-testid="AppTabBar_Profile_Link"]'));
+   const url=new URL(link.href);id=url.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/?$/)?.[1];
+   // Narrow sidebars show only the avatar. The signed-in navigation's profile
+   // link remains available; timeline authors must never supply the identity.
+   const shown=text(e).match(/@([A-Za-z0-9_]+)/)?.[1];
+   assert(url.origin==='https://x.com'&&id&&(!shown||shown.toLowerCase()===id.toLowerCase()),'Xの本人プロフィールが一致しません。');
+   name=text(e).split('\n')[0]||e.querySelector('img[alt]')?.getAttribute('alt')||id;
+  }
   else if(platform==='note'){
    const menu=await wait(()=>button(['メニュー']));if(menu.getAttribute('aria-expanded')!=='true')menu.click();
    const link=await wait(()=>all('a').find(e=>visible(e)&&text(e).includes('クリエイターページ')&&/^\/[A-Za-z0-9_-]+$/.test(new URL(e.href).pathname)));
